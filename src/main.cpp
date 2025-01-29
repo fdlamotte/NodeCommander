@@ -76,7 +76,17 @@ protected:
       display.setCursor(0, 30);
       display.println((char *)info + 5);
       display.display();
-    }
+    } else if (memcmp(app_data, "LOC", 3) == 0) {
+      char info [app_data_len+1];
+      memcpy(info, app_data, app_data_len);
+      info[app_data_len] = 0;
+      Serial.print("Received loc from a beacon : ");
+      Serial.println((char *)info);
+      display.clearDisplay();
+      display.setCursor(0, 30);
+      display.println((char *)info + 4);
+      display.display();
+    } 
   }
 
 public:
