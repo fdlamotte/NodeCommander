@@ -46,11 +46,8 @@
 
 #define OLED_RESET     21 // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-
-//static SSD1306Wire  display(0x3c, 500000, SDA_OLED, SCL_OLED, GEOMETRY_128_64, RST_OLED); // addr , freq , i2c group , resolution , rst
-
-
 
 void VextON(void)
 {
@@ -67,29 +64,10 @@ void VextOFF(void) //Vext default OFF
 /* ------------------------------ Code -------------------------------- */
 
 class MyMesh : public mesh::Mesh {
-  uint32_t last_advert_timestamp = 0;
-  mesh::Identity server_id;
-  uint8_t server_secret[PUB_KEY_SIZE];
-  int server_path_len = -1;
-  uint8_t server_path[MAX_PATH_SIZE];
-  bool got_adv = false;
 
 protected:
   void onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id, uint32_t timestamp, const uint8_t* app_data, size_t app_data_len) override {
-    if (memcmp(app_data, "PING", 4) == 0) {
-      Serial.println("Received advertisement from a PING server");
-
-      // check for replay attacks
-      if (timestamp > last_advert_timestamp) {
-        last_advert_timestamp = timestamp;
-
-        server_id = id;
-        self_id.calcSharedSecret(server_secret, id);  // calc ECDH shared secret
-        got_adv = true;
-      }
-    } else if (memcmp(app_data, "SENS", 4) == 0) {
-      got_adv = true;
-
+    if (memcmp(app_data, "SENS", 4) == 0) {
       char info [app_data_len+1];
       memcpy(info, app_data, app_data_len);
       info[app_data_len] = 0;
@@ -102,61 +80,10 @@ protected:
     }
   }
 
-  int searchPeersByHash(const uint8_t* hash) override {
-    if (got_adv && server_id.isHashMatch(hash)) {
-      return 1;
-    }
-    return 0;  // not found
-  }
-
-  void getPeerSharedSecret(uint8_t* dest_secret, int peer_idx) override {
-    // lookup pre-calculated shared_secret
-    memcpy(dest_secret, server_secret, PUB_KEY_SIZE);
-  }
-
-  void onPeerDataRecv(mesh::Packet* packet, uint8_t type, int sender_idx, const uint8_t* secret, uint8_t* data, size_t len) override {
-    if (type == PAYLOAD_TYPE_RESPONSE) {
-      Serial.println("Received PING Reply!");
-
-      if (packet->isRouteFlood()) {
-        // let server know path TO here, so they can use sendDirect() for future ping responses
-        mesh::Packet* path = createPathReturn(server_id, secret, packet->path, packet->path_len, 0, NULL, 0);
-        if (path) sendFlood(path);
-      }
-    }
-  }
-
-  bool onPeerPathRecv(mesh::Packet* packet, int sender_idx, const uint8_t* secret, uint8_t* path, uint8_t path_len, uint8_t extra_type, uint8_t* extra, uint8_t extra_len) override {
-    // must be from server_id 
-    Serial.printf("PATH to server, path_len=%d\n", (uint32_t) path_len);
-
-    memcpy(server_path, path, server_path_len = path_len);  // store a copy of path, for sendDirect()
-
-    if (extra_type == PAYLOAD_TYPE_RESPONSE && extra_len > 0) {
-      Serial.println("Received PING Reply!");
-    }
-    return true;  // send reciprocal path if necessary
-  }
-
 public:
   MyMesh(mesh::Radio& radio, mesh::RNG& rng, mesh::RTCClock& rtc, mesh::MeshTables& tables)
      : mesh::Mesh(radio, *new ArduinoMillis(), rng, rtc, *new StaticPoolPacketManager(16), tables)
   {
-  }
-
-  void sendPingPacket() {
-    if (!got_adv) return;   // have not received Advert yet
-
-    uint32_t now = getRTCClock()->getCurrentTime(); // important, need timestamp in packet, so that packet_hash will be unique
-    mesh::Packet* ping = createAnonDatagram(PAYLOAD_TYPE_ANON_REQ, self_id, server_id, server_secret, (uint8_t *) &now, sizeof(now));
-
-    if (ping) {
-      if (server_path_len < 0) {
-        sendFlood(ping);
-      } else {
-        sendDirect(ping, server_path, server_path_len);
-      }
-    }
   }
 
 };
@@ -213,14 +140,8 @@ void setup() {
   RadioNoiseListener true_rng(radio);
   the_mesh.self_id = mesh::LocalIdentity(&true_rng);  // create new random identity
 
-  nextPing = 0;
 }
 
 void loop() {
-  if (the_mesh.millisHasNowPassed(nextPing)) {
-    the_mesh.sendPingPacket();
-
-    nextPing = the_mesh.futureMillis(10000);  // attempt ping every 10 seconds
-  }
   the_mesh.loop();
 }
