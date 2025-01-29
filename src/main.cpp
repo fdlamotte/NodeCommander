@@ -31,7 +31,6 @@
 #ifdef HELTEC_LORA_V3
   #include <helpers/HeltecV3Board.h>
   static HeltecV3Board board;
-//  #include "HT_SSD1306Wire.h"
 
 #else
   #error "need to provide a 'board' object"
