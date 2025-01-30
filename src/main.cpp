@@ -62,30 +62,36 @@ void VextOFF(void) //Vext default OFF
 
 /* ------------------------------ Code -------------------------------- */
 
+// just for the display ...
+
 class MyMesh : public mesh::Mesh {
 
 protected:
+  char gps_info[50];
+  char sens_info[50];
+
+  void display_infos() {
+      display.clearDisplay();
+      display.setCursor(0,15);
+      display.println((char *)sens_info + 5);
+      display.setCursor(0,35);
+      display.println((char *)gps_info + 4);
+      display.display();
+  }
+
   void onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id, uint32_t timestamp, const uint8_t* app_data, size_t app_data_len) override {
     if (memcmp(app_data, "SENS", 4) == 0) {
-      char info [app_data_len+1];
-      memcpy(info, app_data, app_data_len);
-      info[app_data_len] = 0;
+      memcpy(sens_info, app_data, app_data_len);
+      sens_info[app_data_len] = 0;
       Serial.print("Received adv from a sensor : ");
-      Serial.println((char *)info);
-      display.clearDisplay();
-      display.setCursor(0, 30);
-      display.println((char *)info + 5);
-      display.display();
+      Serial.println((char *)sens_info);
+      display_infos();
     } else if (memcmp(app_data, "LOC", 3) == 0) {
-      char info [app_data_len+1];
-      memcpy(info, app_data, app_data_len);
-      info[app_data_len] = 0;
+      memcpy(gps_info, app_data, app_data_len);
+      gps_info[app_data_len] = 0;
       Serial.print("Received loc from a beacon : ");
-      Serial.println((char *)info);
-      display.clearDisplay();
-      display.setCursor(0, 30);
-      display.println((char *)info + 4);
-      display.display();
+      Serial.println((char *)gps_info);
+      display_infos();
     } 
   }
 
