@@ -69,13 +69,35 @@ class MyMesh : public mesh::Mesh {
 protected:
   char gps_info[50];
   char sens_info[50];
+  char mvmt_info[50];
+  int mvmts[128] = {0};
+  unsigned int mvmts_idx=0;
 
   void display_infos() {
       display.clearDisplay();
-      display.setCursor(0,15);
+      display.setCursor(0,0);
       display.println((char *)sens_info + 5);
-      display.setCursor(0,35);
+      display.setCursor(0,10);
       display.println((char *)gps_info + 4);
+      display.setCursor(0,20);
+      display.println((char *)mvmt_info + 4);
+
+      unsigned int idx = mvmts_idx;
+      int d = 0;
+      bool u = false; // last point is up
+      for (int i = 127; i >= 0 ; i--) {
+        if (d <= 0) {
+          d = mvmts[idx];
+          idx = (idx - 1) % 128;
+          u = !u;
+        }
+        if (d != 0) { // won't draw if there was a 0 in the array
+          display.drawPixel(i, u ? 35 : 45, SSD1306_WHITE);
+          if (--d == 0) {
+            display.drawLine(i, 35, i, 45, SSD1306_WHITE);
+          }
+        }
+      }
       display.display();
   }
 
@@ -92,13 +114,28 @@ protected:
       Serial.print("Received loc from a beacon : ");
       Serial.println((char *)gps_info);
       display_infos();
-    } 
+    } else if (memcmp(app_data, "MVMT", 4) == 0) {
+      memcpy(mvmt_info, app_data, app_data_len);
+      mvmt_info[app_data_len] = 0;
+      Serial.print("Received adv from a accel : ");
+      Serial.println((char *)mvmt_info);
+      int s, m;
+      sscanf(mvmt_info, "MVMT %d %d", &s, &m);
+      if (m == 1) { // first mvt, store stalled count
+        mvmts_idx = (mvmts_idx + 1) % 128;
+        mvmts[mvmts_idx] = s;
+        mvmts_idx = (mvmts_idx + 1) % 128;
+      }
+      mvmts[mvmts_idx] = m;
+     display_infos();
+    }
   }
 
 public:
   MyMesh(mesh::Radio& radio, mesh::RNG& rng, mesh::RTCClock& rtc, mesh::MeshTables& tables)
      : mesh::Mesh(radio, *new ArduinoMillis(), rng, rtc, *new StaticPoolPacketManager(16), tables)
   {
+
   }
 
 };
